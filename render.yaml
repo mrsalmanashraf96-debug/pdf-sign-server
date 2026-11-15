@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: pdf-sign-server
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
