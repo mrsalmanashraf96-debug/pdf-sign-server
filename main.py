@@ -42,10 +42,28 @@ import re
 
 import pymupdf
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="SignPDF Server — PDF text removal")
+# The web app / preview calls this API cross-origin from the browser, so
+# CORS must be open, and the X-Edit-Font* response headers must be exposed
+# or the browser will hide them from fetch().
+app.add_middleware(
+      CORSMiddleware,
+      allow_origins=["*"],
+      allow_methods=["GET", "POST", "OPTIONS"],
+      allow_headers=["*"],
+      expose_headers=[
+                "X-Edit-Font",
+                "X-Edit-Font-Name",
+                "X-Edit-Font-Original",
+                "X-Edit-Font-Reason",
+                "Content-Disposition",
+      ],
+)
+
 
 # Map of the PDF base-14 font names to the names PyMuPDF's insert_text
 # understands. Base-14 fonts are never embedded, so "reuse" = use by name.
