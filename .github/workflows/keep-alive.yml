@@ -8,4 +8,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping /health
-        run: curl -fsS https://pdf-sign-server.onrender.com/health || true
+        run: curl -fsS https://pdf-sign-server-3kk0.onrender.com/health || true
