@@ -48,12 +48,34 @@ Multipart form, two parts:
 Response: the edited PDF (`application/pdf`). Errors: `400` bad spec/page,
 `404` text not found on that page.
 
+The response also carries headers saying which font the replacement was
+drawn in:
+
+| Header | Values |
+|--------|--------|
+| `X-Edit-Font` | `original` (removed text's own font) · `fallback-helvetica` · `none` (no replacement given) |
+| `X-Edit-Font-Name` | Font actually used, e.g. `LiberationSans-Bold` or `Helvetica` |
+| `X-Edit-Font-Original` | Font of the removed text |
+| `X-Edit-Font-Reason` | `ok` · `base14` · `missing-glyphs:Q,U,Z` · `font-not-extractable` · `no-span-match` · `insert-failed` |
+
 Notes:
 - Redaction removes only the text. Images and vector graphics (including a
   coloured background block) are left untouched.
-- Replacement text uses the standard Helvetica family (the PDF's original
-  embedded font cannot be reused for new text). Size, weight and colour come
-  from the `spec`, so match them to the original text.
+- **Original-font reuse:** the replacement is drawn in the SAME font the
+  removed text used. The server finds the text's span, extracts the
+  embedded font program and re-embeds it for the replacement. Base-14
+  fonts (Helvetica, Times, Courier…) are reused by name — that is the
+  same font. The spec's `bold` flag only matters for the Helvetica
+  fallback; an original font already carries its own weight.
+- **Fallback rule (honest limit):** embedded fonts in a PDF are usually
+  SUBSETS — they only contain the glyphs the document already uses. The
+  server checks every letter of the replacement against the subset's real
+  glyph table. If any letter is missing, the WHOLE replacement falls back
+  to Helvetica (a half-original / half-Helvetica word would look worse)
+  and the headers say so (`X-Edit-Font: fallback-helvetica`,
+  `X-Edit-Font-Reason: missing-glyphs:…`). So a replacement works in the
+  original font exactly when its letters already appear somewhere in the
+  document in that font.
 - The app must call this over the internet — the edit needs the server. The
   rest of the app (sign, scan, merge, etc.) still works fully offline.
 
@@ -91,7 +113,16 @@ the free tier, the same Docker image runs unchanged on Railway or Fly.io.
 
 ## Local test (done 15 Nov 2026)
 
-`ebaypro-client-service-agreement.pdf`, page 0: removed the word `DRAFT`
-(at 63, 80.3, size 12, bold) and inserted `FINAL`. Verified with PyMuPDF:
-old word gone, replacement present, neighbouring text untouched, page count
-unchanged, file opens normally.
+`ebaypro-client-service-agreement.pdf`, page 0 (word `DRAFT`, font
+LiberationSans-Bold, at 63, 80.3, size 11). All three verified with PyMuPDF
+(span font in `get_text("dict")` + response headers + rendered pixels):
+
+| Test | Replacement | Result |
+|------|-------------|--------|
+| Same letters | `DRAFT` → `DART` | **Original font** — span font `LiberationSans-Bold`, header `X-Edit-Font: original` |
+| New letters | `DRAFT` → `QUIZ` | **Fallback Helvetica** — span font `Helvetica`, header `fallback-helvetica`, reason `missing-glyphs:Q,U,Z` |
+| Regression | `DRAFT` → `FINAL` | **Original font** — span font `LiberationSans-Bold` (F, I, N, A, L all exist in the subset) |
+
+Every case: old word gone, replacement present and visibly rendered,
+neighbouring text untouched, page count unchanged (5/5), background
+graphics untouched (32/32 vector drawings on page 0).
